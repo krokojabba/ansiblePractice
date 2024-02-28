@@ -1,0 +1,100 @@
+- hosts: all
+  gather_facts: false
+
+  vars:
+    root_dir: /home/ansible-worker/www/
+    repo: https://github.com/iphilka/stud-template.git
+    conf_name: ansible.iphilka.ru.conf
+    ansible_username: ansible-worker
+
+  tasks:
+    - name: add ansible user
+      ansible.builtin.user:
+        name: "{{ ansible_username }}"
+        state: present
+        groups: root
+      become: true
+      tags: user
+
+    - name: Change permissions for ansible-worker home
+      ansible.builtin.file:
+        path: /home/{{ ansible_username }}
+        mode: 0755
+      become: yes
+      tags: user
+
+    - name: Set authorized key taken from file
+      ansible.posix.authorized_key:
+        user: "{{ ansible_username }}"
+        state: present
+        key: "{{ lookup('file', 'ssh_keys/id_rsa.pub') }}"
+      become: yes
+      tags: user
+
+    - name: install packages
+      ansible.builtin.apt:
+        name:
+          - nginx
+          - git
+        state: latest
+      become: yes
+      tags: install
+
+    - name: create project directory if it does not exist
+      ansible.builtin.file:
+        path: "{{root_dir}}"
+        state: directory
+        mode: 0755
+      #become: yes
+      tags: repo
+
+    - name: clone repo
+      ansible.builtin.git:
+        repo: "{{ repo }}"
+        dest: "{{ root_dir }}"
+        force: yes
+      #become: yes
+      tags: repo
+
+    - name: update nginx project config in sites-available
+      ansible.builtin.template:
+        src: files/{{ conf_name }}
+        dest: /etc/nginx/sites-available/{{ conf_name }}
+      notify:
+        - restart nginx
+      become: yes
+      tags: nginx
+
+    - name: create a symbolic link to sites-enabled
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/{{ conf_name }}
+        dest: /etc/nginx/sites-enabled/{{ conf_name }}
+        state: link
+      notify:
+        - restart nginx
+      become: yes
+      tags: nginx
+
+    - name: delete default server
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify:
+        - restart nginx
+      become: yes
+      tags: nginx
+
+    - name: update content
+      ansible.builtin.copy:
+        src: files/index.html
+        dest: "{{root_dir}}index.html"
+      #become: yes
+      tags:
+        - content
+
+  handlers:
+    - name: restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      become: yes

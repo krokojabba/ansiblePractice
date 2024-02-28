@@ -1,0 +1,5 @@
+ansible-playbook playbook.yaml -i hosts.ini -t user
+ansible-playbook playbook.yaml -i hosts.ini -t install
+ansible-playbook playbook.yaml -i hosts.ini -t repo -u ansible-worker
+ansible-playbook playbook.yaml -i hosts.ini -t content -u ansible-worker
+ansible-playbook playbook.yaml -i hosts.ini -t nginx
